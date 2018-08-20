@@ -8,6 +8,11 @@ autobins = false
 name = "generate_stub"
 path = "src/bin/generate_stub.rs"
 
+[[bin]]
+name = "check_processes"
+path = "src/bin/check_processes.rs"
+
 [dependencies]
 clap = "2.26.0"
 termcolor = "0.3"
+procfs = "0.3.1"
