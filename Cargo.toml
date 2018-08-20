@@ -1,0 +1,13 @@
+[package]
+name = "rust-tools"
+version = "0.1.0"
+authors = ["apcolema"]
+autobins = false
+
+[[bin]]
+name = "generate_stub"
+path = "src/bin/generate_stub.rs"
+
+[dependencies]
+clap = "2.26.0"
+termcolor = "0.3"
