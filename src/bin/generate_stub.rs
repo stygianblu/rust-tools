@@ -3,6 +3,7 @@ extern crate termcolor;
 
 mod constants;
 
+use std::process;
 use clap::{Arg, App};
 use self::termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use std::io::Write;
@@ -43,7 +44,7 @@ fn main() {
             .value_name("ARGS")
             .takes_value(true)
             .multiple(true)
-            .help("Args of the function"))
+            .help("Args of the function in the form ARG:TYPE"))
         .arg(Arg::with_name("RETURN")
             .short("r")
             .long("return")
@@ -51,6 +52,18 @@ fn main() {
             .takes_value(true)
             .multiple(true)
             .help("Returns of the function"))
+		.arg(Arg::with_name("IDENT")
+            .short("i")
+            .long("indent")
+            .value_name("IDENT")
+            .takes_value(true)
+            .help("Tabs to indent stub, defaults to none"))
+        .arg(Arg::with_name("COMMENTS")
+            .short("c")
+            .long("comments")
+            .value_name("COMMENTS")
+            .takes_value(false)
+            .help("Only the comment block needed"))
         .get_matches();
 
     let publish = matches.occurrences_of("PUBLISH");
@@ -58,6 +71,11 @@ fn main() {
         0 => false,
         1 | _ => true,
     };
+	let comments = matches.occurrences_of("COMMENTS");
+	let comments = match comments {
+		0 => false,
+		1 | _ => true,
+	};
     let name = matches.value_of("NAME");
     let name = match name {
         Some(v) => v,
@@ -83,6 +101,24 @@ fn main() {
         0 => false,
         1 | _ => true,
     };
+    let has_indent = matches.occurrences_of("IDENT");
+    let has_indent = match has_indent {
+        0 => false,
+        1 | _ => true,
+    };
+	let mut TABS = String::from("");
+	if has_indent {
+		let num_tabs = matches.value_of("IDENT");
+		let _ = match num_tabs {
+			Some(v) => {
+				let num: i32 = v.parse().unwrap();
+				for i in 0..num {
+					TABS.push_str("\t");
+				}
+			},
+			None => TABS = String::from(""),
+		};
+	}
 
     let mut args: Vec<&str> = Vec::new();
     let mut returns: Vec<&str> = Vec::new();
@@ -91,15 +127,26 @@ fn main() {
 
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
     stdout.set_color(ColorSpec::new().set_fg(Some(Color::Magenta)));
-    let _ = write!(&mut stdout, "/**\n{}\n\n### Parameters:\n", desc);
+    let _ = write!(&mut stdout, "{}/**\n{}* {}\n{}*\n{}* ### Parameters:\n", TABS, TABS, desc, TABS, TABS);
+	
+	let mut arg_type: Vec<&str>;
     for a in args.iter() {
-        let _ = write!(&mut stdout, "* {} - *[TYPE]*: Description...\n", a);
+		arg_type = a.splitn(2, ":").collect();
+        let _ = write!(&mut stdout, "{}* {} - *{}*: Description...\n", TABS, arg_type[0], arg_type[1]);
     }
-    let _ = write!(&mut stdout, "\n### Returns:\n");
+    let _ = write!(&mut stdout, "{}*\n{}* ### Returns:\n", TABS, TABS);
     for r in returns.iter() {
-        let _ = write!(&mut stdout, "* {}: Description...\n", r);
+        let _ = write!(&mut stdout, "{}* {}: Description...\n", TABS, r);
     }
-    let _ = write!(&mut stdout, "*/\n");
+    let _ = write!(&mut stdout, "{}*/\n", TABS);
+
+	//If -COMMENTS flag present then only return the comment block
+	if comments {
+		process::exit(0);
+	}
+
+	let _ = write!(&mut stdout, "{}", TABS);	
+
     stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)));
     if publish {
         let _ = write!(&mut stdout, "pub ");
@@ -108,26 +155,46 @@ fn main() {
     stdout.set_color(ColorSpec::new().set_fg(Some(Color::Blue)));
     let _ = write!(&mut stdout, "{}(", name);
     stdout.set_color(ColorSpec::new().set_fg(Some(Color::White)));
+
+	let mut arg_line = String::from("");
+
     if method {
-        let _ = write!(&mut stdout, "&self");
+		arg_line.push_str("&self, ");
     }
-    if has_args { 
+    if has_args {
+		let mut split: Vec<&str>;
         for a in args.iter() {
-            let _ = write!(&mut stdout, ", ");
-            let _ = write!(&mut stdout, "{}: ", a);
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)));
-            let _ = write!(&mut stdout, "[TYPE]");
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::White)));
+			split = a.splitn(2, ":").collect();
+			arg_line.push_str(format!("{}: {}, ", split[0], split[1]).as_str());
         }
     }
+
+	//Remove the last " ,"
+	let tmp_len = arg_line.len();
+	arg_line.truncate(tmp_len - 2);
+	let _ = write!(&mut stdout, "{}", arg_line);
+
+    stdout.set_color(ColorSpec::new().set_fg(Some(Color::Blue)));
     let _ = write!(&mut stdout, ") ");
     if has_rets {
         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)));
         let _ = write!(&mut stdout, "-> ");
         stdout.set_color(ColorSpec::new().set_fg(Some(Color::White)));
+
+		let mut return_line = String::from("");
+		if returns.len() > 1 { return_line.push_str("("); }
+
         for r in returns.iter() {
-            let _ = write!(&mut stdout, "{} ", r);
+			return_line.push_str(format!("{}", r).as_str());
+			if returns.len() > 1 { return_line.push_str(", "); }
         }
+		if returns.len() > 1 { 
+			let tmp_len = return_line.len();
+			return_line.truncate(tmp_len - 2);	
+			return_line.push_str(")");
+		}
+	
+		let _ = write!(&mut stdout, "{}", return_line);
     }
-    let _ = write!(&mut stdout, "{{\n\t//TODO\n}}\n");
+    let _ = write!(&mut stdout, " {{\n{}\t//TODO\n{}}}\n", TABS, TABS);
 }
